@@ -1,4 +1,4 @@
-Country,Election type,Year,Tornout,Compulsory,Region
+'Country','Election type','Year','Tornout','Compulsory','Region'
 Albania,Parliamentary,2021,46.32,No,Leste Europeu
 Algeria,Parliamentary,2021,23.03,No,Africa
 Andorra,Parliamentary,2019,68.33,No,Europa Ocidental
