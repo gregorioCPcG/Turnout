@@ -1,0 +1,195 @@
+---
+title: "voto_obrigatorio"
+output:
+  html_document:
+    df_print: paged
+---
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#load pacotes
+library(readxl)
+base <- read_excel("idea_export_40_616830a0840fa.xls")
+library(tidyverse)
+library(huxtable)
+library(coefplot)
+library(olsrr)
+library(sjPlot)
+```
+
+Caso queira replicar, solicite-me o arquivo 'idea_export_40_616830a0840fa.xls' pelo meu e-mail - encontrado em https://sites.google.com/view/gregoriosilva/contato
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+base$Tornout <- as.numeric(base$Tornout) # arrumar problemas na codificação dos dados, transformar em numérico
+```
+
+
+Aqui constarão especialmente os códigos, uma análise mais opinativa sobre o voto obrigatório constará no youtube: https://www.youtube.com/channel/UC0rKmGqFWnsWozw5rftWyag/videos
+
+
+As opiniões que formei foram melhor consolidadas a partir de três leituras:
+
+
+Franklin, M. N. (1999). Electoral engineering and cross-national turnout differences: What role for compulsory voting? British Journal of Political Science, 29(01), 205–216.
+
+Hill, L. (2011). Increasing turnout using compulsory voting. Politics, 31(1), 27–36.
+
+Lever, A. (2010). Compulsory voting: a critical perspective. British Journal of Political Science, 40(04), 897–915.
+
+FREIRE(2020) Voter Behavior Under Compulsory Voting: The Case of Brazil/ Alessandro de Oliveira Gouveia Freire. – Brasília - DF, 2020/Tese (Doutorado) – Universidade de Brasília - UnB. Instituto de Ciência Política - IPOL. Programa de Pós-Graduação, 2020
+
+# Lista completa de casos utilizados 
+
+```{r}
+dim(base) # numero de linhas
+```
+
+118 países
+
+Selecionados casos de países com eleições minimamente regulares.
+
+ Foram selecionadas as eleições parlamentares mais recentes encontradas até 14 de Outubro de 2021 - a fonte dos dados advém da base de dados da  International Institute for Democracy and Electoral Assistance (International IDEA) 
+ 
+ 
+-  https://www.idea.int/about-us 
+
+
+- https://www.idea.int/data-tools/data/voter-turnout
+
+Lista completa dos casos - classificados pelo maior comparecimento - consta abaixo. 
+
+```{r}
+tibble(base%>%
+         arrange(desc(Tornout))%>%select(Country, Tornout, Compulsory))
+```
+
+# Objetivo:
+
+verificar se comparecimento eleitoral é explicado por Região do globo e lei eleitoral que obriga participação
+
+Modelo contemplado nessa análise
+
+$Comparecimento = X1 + X2 + e$
+
+Intercepto - usual em análises - para saber mais sobre procure no google
+
+X1 = Obrigatoriedade do voto (efeito institucional)
+X2 = Região do mundo (efeito cultural)
+
+
+Sendo o e = erro (o que não foi explicado pela análise, o que ficou de fora, por exemplo - desde quando tem eleições)
+
+# Análise descritiva
+
+
+```{r}
+summary(base$Tornout)#dispersão Tornout
+table(base$Region)
+table(base$Compulsory)
+summary(base$Year)
+hist(base$Tornout)
+```
+
+# Análise bivariada
+
+```{r}
+by(base$Tornout, base$Region, mean)
+by(base$Tornout, base$Compulsory, mean)
+prop.table(table(base$Region, base$Compulsory),1)
+boxplot(base$Tornout ~ base$Region, 
+        col = "orange", ylab="Comparecimento", xlab="Região")
+boxplot(base$Tornout ~ base$Compulsory, 
+        col = "orange", ylab="Comparecimento", xlab="Voto Obrigatório?")
+```
+
+Percebe-se que há associações mútuas entre as variáveis.
+
+# Regressão
+
+$Modelo 1$ - Obrigatoriedade explica Comparecimento?
+
+$Modelo 2$ - Região explica comparecimento?
+
+$Modelo Completo:$
+
+$Comparecimento = Intercepto + Obrigatoriedade + Região + e$
+
+```{r}
+modelo_Obrig <- lm(Tornout ~ Compulsory, data = base) # modelo simples 1
+modelo_region <- lm(Tornout ~ Region, data = base) # modelo simples 2
+modelo_full <- lm(Tornout ~ Compulsory + Region, data = base) # modelo completo 
+huxreg(modelo_Obrig, modelo_region, modelo_full, stars = c(`*` = 0.1, `**` = 0.05,
+                                  `***` = 0.01), statistics = c("N. obs." = "nobs", "R2" = "r.squared",
+                                                                "AIC" = "AIC"))
+coefplot(modelo_full, intercept = F)
+```
+
+Algumas regiões são explicativas (África é referência, todas são comparadas com essa). Para outras comparações verificar os diferentes impactos. Oceania e Europa Ocidental tem os maiores efeitos.  
+
+Obrigatoriedade é explicativo.
+
+Abaixo o diagnóstico residual do modelo completo>
+
+```{r}
+plot(modelo_full) # a segunda
+```
+
+```{r}
+ols_vif_tol(modelo_full)
+```
+
+VIF ok ("VIF de 1 indica que não há correlação entre um determinado preditor e os demais incluídos no modelo, logo, não ocorre a inflação do seu coeficiente estimado")
+
+abaixo análise breve dos resídos
+
+```{r}
+resid <- (cbind(base$Tornout, predict(modelo_full), residuals(modelo_full)))
+```
+
+Argélia e Venzeula foram os casos em que ocorreu maior imprevisbilidade negativa (menor participação que o previsto pelo modelo). Não surpreende dado recentes crises de legitimidade nesses países.
+
+Brasil previu 10% a menos de votação (talvez o fato de ser junto com a de presidente, não verificado)
+
+# O peso em cada Região
+
+Regreessões separadas para cada região, 
+
+Modelo 1 - África
+
+Modelo 2 - Américas
+
+Modelo 3 e 4 - Ásia e Oceania (sem separação e com separação)
+
+Modelo 5 e 6- Europa (ocidental + Oriental) (sem separação e com separação)
+
+
+```{r}
+#criando bases e modelos  de cada região
+# Africa
+Africa <- base%>%
+  filter(Region == "Africa")
+modelo_Africa <- lm(Tornout ~ Compulsory, data = Africa)
+# Americas
+Americas <- base%>%
+  filter(Region == "Americas")
+modelo_Americas <- lm(Tornout ~ Compulsory, data = Americas)
+#Asia/Oceania
+Asia_Oceania <- base%>%
+  filter(Region == "Asia"| Region == "Oceania")
+modelo_AsiaOceania1 <- lm(Tornout ~ Compulsory, data = Asia_Oceania)
+modelo_AsiaOceania2 <- lm(Tornout ~ Compulsory + Region, data = Asia_Oceania)
+#Europa
+Europa <- base%>%
+  filter(Region == "Leste Europeu"| Region == "Europa Ocidental")
+modelo_Europa1 <- lm(Tornout ~ Compulsory, data = Europa)
+modelo_Europa2 <- lm(Tornout ~ Compulsory + Region, data = Europa)
+```
+
+```{r}
+huxreg(modelo_Africa, modelo_Americas, modelo_AsiaOceania1, modelo_AsiaOceania2, modelo_Europa1, modelo_Europa2, stars = c(`*` = 0.1, `**` = 0.05,
+                                  `***` = 0.01), statistics = c("N. obs." = "nobs", "R2" = "r.squared",
+                                                                "AIC" = "AIC"))
+```
+
+O efeito cultural é observável - África e Ásia não sentem o efeito da compulsoriedade. Oceania eleva por si só (modelo 5) o comparecimento, Leste Europeu tem efeito oposto dentro do contexto europeu (modelo 6).
